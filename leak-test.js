@@ -495,13 +495,7 @@ function fireWebhook(event, data) {
 }
 
 /* ============================================================
-   TAP HELPER
-   GHL embeds this page in a cross-origin iframe on iOS Safari.
-   In that environment, click events are suppressed on non-anchor
-   non-input elements. Fix: use touchend as the primary trigger
-   and fall back to click for desktop/Android. A "fired" flag
-   prevents the touchend + click double-fire on devices that
-   send both events.
+   TAP HELPER — touchend primary, click fallback, double-fire guard
    ============================================================ */
 function onTap(el, fn) {
   if (!el) return;
@@ -522,21 +516,28 @@ function onTap(el, fn) {
 }
 
 /* ============================================================
-   INIT
+   INIT — uses event delegation on document so it works even
+   when GHL re-renders the DOM after script execution.
+   Also retries every 200ms for up to 5s until elements exist.
    ============================================================ */
-function initLeakTest() {
+function attachListeners() {
+  var btnStart   = document.getElementById("btn-start");
+  var btnBack    = document.getElementById("q-back");
+  var btnGate    = document.getElementById("gate-btn");
+  var btnRestart = document.getElementById("btn-restart");
 
-  /* Dummy touchstart on every interactive ancestor — tells iOS
-     Safari the whole card tree is interactive. */
+  if (!btnStart) return false; // DOM not ready yet
+
+  /* Dummy touchstart — makes iOS Safari treat container as interactive */
   ["card","screen-intro","screen-question","screen-gate","screen-results"].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener("touchstart", function(){}, {passive:true});
   });
 
-  onTap(document.getElementById("btn-start"), startTest);
-  onTap(document.getElementById("q-back"), prevQuestion);
-  onTap(document.getElementById("gate-btn"), submitGate);
-  onTap(document.getElementById("btn-restart"), restart);
+  onTap(btnStart,   startTest);
+  onTap(btnBack,    prevQuestion);
+  onTap(btnGate,    submitGate);
+  onTap(btnRestart, restart);
 
   ["in-name","in-email","in-company"].forEach(function(id) {
     var f = document.getElementById(id);
@@ -547,11 +548,73 @@ function initLeakTest() {
     }
   });
 
+  /* Event delegation fallback — catches any clicks that bubble up
+     in case direct binding still fails in GHL iframe */
+  document.addEventListener("touchend", function(e) {
+    var t = e.target;
+    while (t && t !== document) {
+      if (t.id === "btn-start")   { e.preventDefault(); startTest();   return; }
+      if (t.id === "q-back")      { e.preventDefault(); prevQuestion(); return; }
+      if (t.id === "gate-btn")    { e.preventDefault(); submitGate();  return; }
+      if (t.id === "btn-restart") { e.preventDefault(); restart();     return; }
+      if (t.id === "btn-submit-rent") { e.preventDefault(); submitRent(); return; }
+      if (t.classList && t.classList.contains("option")) {
+        e.preventDefault();
+        var opts = t.parentNode.querySelectorAll(".option");
+        for (var i = 0; i < opts.length; i++) {
+          if (opts[i] === t) { selectOption(i); return; }
+        }
+      }
+      t = t.parentNode;
+    }
+  }, {passive: false});
+
+  document.addEventListener("click", function(e) {
+    var t = e.target;
+    while (t && t !== document) {
+      if (t.id === "btn-start")   { startTest();   return; }
+      if (t.id === "q-back")      { prevQuestion(); return; }
+      if (t.id === "gate-btn")    { submitGate();  return; }
+      if (t.id === "btn-restart") { restart();     return; }
+      if (t.id === "btn-submit-rent") { submitRent(); return; }
+      if (t.classList && t.classList.contains("option")) {
+        var opts = t.parentNode.querySelectorAll(".option");
+        for (var i = 0; i < opts.length; i++) {
+          if (opts[i] === t) { selectOption(i); return; }
+        }
+      }
+      t = t.parentNode;
+    }
+  });
+
   show("screen-intro");
+  return true;
 }
 
+function initLeakTest() {
+  if (!attachListeners()) {
+    /* Elements not in DOM yet — retry every 200ms up to 5 seconds */
+    var attempts = 0;
+    var timer = setInterval(function() {
+      attempts++;
+      if (attachListeners() || attempts >= 25) {
+        clearInterval(timer);
+      }
+    }, 200);
+  }
+}
+
+/* Multiple entry points — covers all GHL loading scenarios */
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", initLeakTest);
 } else {
   initLeakTest();
 }
+window.addEventListener("load", function() {
+  if (!document.getElementById("btn-start")._tapBound) {
+    initLeakTest();
+  }
+});
+/* Last resort: also run after 1s and 3s in case GHL defers rendering */
+setTimeout(initLeakTest, 1000);
+setTimeout(initLeakTest, 3000);
