@@ -604,6 +604,16 @@ function initLeakTest() {
   }
 }
 
+
+/* Expose functions to window scope for GHL iframe compatibility */
+window.startTest    = startTest;
+window.prevQuestion = prevQuestion;
+window.submitGate   = submitGate;
+window.submitRent   = submitRent;
+window.restart      = restart;
+window.selectOption = selectOption;
+window.initLeakTest = initLeakTest;
+
 /* Multiple entry points — covers all GHL loading scenarios */
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", initLeakTest);
