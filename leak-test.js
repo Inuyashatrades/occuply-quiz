@@ -610,11 +610,41 @@ if (document.readyState === "loading") {
 } else {
   initLeakTest();
 }
-window.addEventListener("load", function() {
-  if (!document.getElementById("btn-start")._tapBound) {
-    initLeakTest();
-  }
-});
-/* Last resort: also run after 1s and 3s in case GHL defers rendering */
-setTimeout(initLeakTest, 1000);
+window.addEventListener("load", initLeakTest);
+setTimeout(initLeakTest, 500);
+setTimeout(initLeakTest, 1500);
 setTimeout(initLeakTest, 3000);
+
+/* Nuclear option: also attach to window for GHL iframe scenarios */
+window.addEventListener("touchend", function(e) {
+  var t = e.target;
+  while (t && t !== document.body) {
+    if (t.id === "btn-start")       { e.preventDefault(); e.stopImmediatePropagation(); startTest();    return; }
+    if (t.id === "q-back")          { e.preventDefault(); e.stopImmediatePropagation(); prevQuestion(); return; }
+    if (t.id === "gate-btn")        { e.preventDefault(); e.stopImmediatePropagation(); submitGate();   return; }
+    if (t.id === "btn-restart")     { e.preventDefault(); e.stopImmediatePropagation(); restart();      return; }
+    if (t.id === "btn-submit-rent") { e.preventDefault(); e.stopImmediatePropagation(); submitRent();   return; }
+    if (t.classList && t.classList.contains("option")) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      var opts = t.parentNode ? t.parentNode.querySelectorAll(".option") : [];
+      for (var i = 0; i < opts.length; i++) { if (opts[i] === t) { selectOption(i); return; } }
+    }
+    t = t.parentNode;
+  }
+}, {passive: false, capture: true});
+
+window.addEventListener("click", function(e) {
+  var t = e.target;
+  while (t && t !== document.body) {
+    if (t.id === "btn-start")       { startTest();    return; }
+    if (t.id === "q-back")          { prevQuestion(); return; }
+    if (t.id === "gate-btn")        { submitGate();   return; }
+    if (t.id === "btn-restart")     { restart();      return; }
+    if (t.id === "btn-submit-rent") { submitRent();   return; }
+    if (t.classList && t.classList.contains("option")) {
+      var opts = t.parentNode ? t.parentNode.querySelectorAll(".option") : [];
+      for (var i = 0; i < opts.length; i++) { if (opts[i] === t) { selectOption(i); return; } }
+    }
+    t = t.parentNode;
+  }
+}, {capture: true});
